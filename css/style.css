@@ -10,7 +10,7 @@ body {
 }
 
 * {
-	font-family: "Fragment mono", monospaced;
+	font-family: "Fragment Mono", monospace;
 	box-sizing: border-box;
 }
 
@@ -23,17 +23,75 @@ p {
 
 
 #landing {
-	width: 50%;
-	height: 100vh;
+	--color-landing-fondo: #A3ADA5;
+	--color-landing-texto: #F4F2EC;
+	min-height: 100vh;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	align-items: center;
-	text-align: center;
-	margin: auto;
-	background: #CCE0CC;
+	align-items: flex-start;
+	gap: 1.5rem;
+	text-align: left;
+	padding: 4rem 5rem;
+	background: var(--color-landing-fondo);
+	color: var(--color-landing-texto);
+	font-size: 14px;
+	line-height: 1.6;
+	letter-spacing: 0.06em;
 }
-	
+
+.landing p {
+	margin: 0;
+	max-width: 52ch;
+}
+
+.landing a {
+	color: inherit;
+	font-weight: normal;
+	letter-spacing: inherit;
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+}
+
+.landing__encabezado {
+	display: flex;
+	flex-direction: column;
+}
+
+.landing__titulo {
+	font-family: "Xanh Mono", monospace;
+	font-style: italic;
+	font-weight: 400;
+	font-size: 8rem;
+	line-height: 1;
+	letter-spacing: 0;
+	margin: 0 0 2rem;
+}
+
+.landing__instrucciones {
+	display: grid;
+	grid-template-columns: max-content max-content;
+	column-gap: 1.5rem;
+	align-items: center;
+}
+
+/* each row's two spans become cells of the parent grid */
+.instruccion {
+	display: contents;
+}
+
+/* the landing buttons are only illustrations of the real controls */
+.instruccion__tecla .boton,
+.instruccion__tecla .boton i {
+	cursor: default;
+	padding: 0;
+}
+
+.landing__creditos {
+	font-size: 14px;
+	opacity: 0.8;
+}
+
 a {
 	text-decoration: none;
 	font-weight: bold;
@@ -50,19 +108,19 @@ button:hover {
 	cursor:pointer;
 }
 button:not(.boton--icono):hover, a:hover {
-	letter-spacing: 0.3em;
+	letter-spacing: 0.6em;
 }
 
 #log {display: none;}
 
-#comenzar  {
-	background: #CCE0CC;
-	color: var(--color-foreground);
-	text-align: center;
-	padding: 5px 10px;
-	margin-top: 20px;
+.landing__button {
+	background: transparent;
+	color: inherit;
+	font-size: 24px;
+	letter-spacing: 0.06em;
+	padding: 1.5rem 0rem;
+	border: none;
 	transition: all 500ms;
-	border:none;
 }
 
 
@@ -144,19 +202,19 @@ button i {
 
 }
 
-#record{
+.boton--grabar {
 	color: red;
 	border-radius: 100%;
 	padding: 4px 7px;
 }
 
-#stop{
+.boton--parar {
 	color: var(--color-foreground);
 	border-radius: 5%;
 	padding: 4px 6px;
 }
 
-#record.active {
+.boton--grabar.active {
 	border: 0px solid red;
 	background-color: red;
     color: var(--color-foreground);

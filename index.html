@@ -1,32 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>soundscape</title>
+		<title>sonarium</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Fragment+Mono:ital@0;1&family=Wix+Madefor+Text:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet">
-
+        <link href="https://fonts.googleapis.com/css2?family=Fragment+Mono:ital@0;1&family=Wix+Madefor+Text:ital,wght@0,400..800;1,400..800&family=Xanh+Mono:ital@0;1&display=swap" rel="stylesheet">
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 		<link rel="stylesheet" type="text/css" href="css/style.css">
 	</head>
 	<body>
 
-		<div id="landing">
+		<div id="landing" class="landing">
+			<header class="landing__encabezado">
+				<h1 class="landing__titulo">sonarium</h1>
+				<p class="landing__bajada">play with sound by moving through space</p>
+				<p class="landing__bajada">record small loops, leave them somewhere, and walk around.</p>
+			</header>
 
- 			<p>WASD / Mouse - move around</p>
- 			<p>R / F - up / down</p>
-			<p><button disabled id="record" class="boton"><i class="fa fa-circle" aria-hidden="true"></i></button> - start Recording </p>
-			<p><button disabled id="stop" class="boton"><i class=" fa fa-stop" aria-hidden="true"></i></button> - stop Recording </p>
-			<p>once you finish recording, the recorded sound will stay looping in that place.</p>
-			<p>use headphones for a better experience :)</p>
-			<p>this site was built by <a href="https://mariamartina.com"  target="_blank">maria martina</a> </p>
-            <p>using <a href="https://threejs.org/examples/#misc_sound" target="_blank">three.js</a> and 
-			<a href="https://github.com/mattdiamond/Recorderjs" target="_blank">recorder.js</a></p>
+			<section class="landing__instrucciones">
+				<div class="instruccion">
+					<span class="instruccion__tecla">WASD / Mouse</span>
+					<span class="instruccion__desc">move around</span>
+				</div>
+				<div class="instruccion">
+					<span class="instruccion__tecla">R / F</span>
+					<span class="instruccion__desc">up / down</span>
+				</div>
+				<div class="instruccion">
+					<span class="instruccion__tecla"><button disabled class="boton boton--grabar"><i class="fa fa-circle" aria-hidden="true"></i></button></span>
+					<span class="instruccion__desc">start recording</span>
+				</div>
+				<div class="instruccion">
+					<span class="instruccion__tecla"><button disabled class="boton boton--parar"><i class="fa fa-stop" aria-hidden="true"></i></button></span>
+					<span class="instruccion__desc">stop recording</span>
+				</div>
+			</section>
 
-			<button onclick="cambioEstilo()" id="comenzar"> start </button>
- 		</div >
+			<div class="landing__notas">
+				<p>once you finish recording, the recorded sound will stay looping in that place.</p>
+				<p>use headphones for a better experience :)</p>
+			</div>
+
+			<button onclick="cambioEstilo()" id="comenzar" class="button landing__button">start</button>
+
+			<footer class="landing__creditos">
+				<p>this site was built by <a href="https://mariamartina.com" target="_blank">maria martina</a></p>
+				<p>using <a href="https://threejs.org/examples/#misc_sound" target="_blank">three.js</a> and
+				<a href="https://github.com/mattdiamond/Recorderjs" target="_blank">recorder.js</a></p>
+			</footer>
+		</div>
 
 		<div id="control" class="hidden">
 			<div class="seccion">
@@ -40,8 +64,8 @@
 			</div>
 			
 			<div class="seccion">
-				<button onclick="startRecordingSound(this)"  class="boton  boton--icono" id="record"><i class="fa fa-circle" aria-hidden="true"></i></button>
-		  		<button onclick="stopRecordingSound(this)" class="boton  boton--icono"  id="stop"><i class=" fa fa-stop" aria-hidden="true"></i></button>
+				<button onclick="startRecordingSound(this)"  class="boton boton--icono boton--grabar" id="record"><i class="fa fa-circle" aria-hidden="true"></i></button>
+		  		<button onclick="stopRecordingSound(this)" class="boton boton--icono boton--parar" id="stop"><i class=" fa fa-stop" aria-hidden="true"></i></button>
 		  		<p >Start/Stop Recording Sound</p>
 	  		</div>
 	  		<div class="seccion">

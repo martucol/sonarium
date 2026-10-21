@@ -58,7 +58,8 @@ function cambioEstilo(){
 
 function info(){
 	container.style.visibility="hidden";
-	landing.style.display="block";
+	// clear the inline style so #landing falls back to its css (display: flex)
+	landing.style.display="";
 	controles.style.visibility="hidden";
 };
 
