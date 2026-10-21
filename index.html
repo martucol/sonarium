@@ -492,6 +492,8 @@
         varying vec2 vUv;
         varying float noise;
         varying float smallernoise;
+        varying float softnoise;
+        varying vec3 vDir;
         uniform float time;
         uniform float sync;
 
@@ -510,8 +512,11 @@
             vUv = uv;
 
             // add time to the noise parameters so it's animated
-            noise = 10.0 *  -.09 * turbulence( .5 * normal + sync + time * 0.25);
-            smallernoise = 10.0 *  -.09 * turbulence( 1000.0 * normal + time * 0.25);
+            noise = 10.0 *  -.09 * turbulence( .5 * normal + sync + time * 0.125);
+            smallernoise = 10.0 *  -.09 * turbulence( 1000.0 * normal + time * 0.125);
+            // single low-frequency octave: smooth across vertices, no grid artifacts
+            softnoise = pnoise( 1.5 * normal + vec3( time * 0.1 ), vec3( 10.0 ) );
+            vDir = normal;
 
             float b = sync * pnoise( 0.05 * position + vec3( 2.0 * time ), vec3( 100.0 ) );
             float displacement = - noise + b;
@@ -536,15 +541,29 @@
             varying vec2 vUv;
             varying float noise;
             varying float smallernoise;
+            varying float softnoise;
+            varying vec3 vDir;
             uniform float time;
+            uniform vec3 color;
 
             void main() {
-                vec2 position = -1.0 + 2.0 * vUv;
+                vec3 dir = normalize(vDir);
 
-                float red = abs(smallernoise  * 2.0);
-                float green = 1.0 - abs(sin( noise * 5.0 * position.x)) * 0.2 ;
-                float blue = 1.0 - sin( noise*time  / 2.0) * 0.3 + 0.7;
-                gl_FragColor = vec4( red  , green, blue, 1.0);
+                // background color as base, shaded darker / lighter, plus one cool accent
+                vec3 shadow = color * 0.78;
+                vec3 light  = mix(color, vec3(1.0), 0.235);
+                vec3 accent = vec3(0.78, 0.84, 0.86);
+
+                // large soft gradient across the sky
+                float broad = 0.5 + 0.5 * sin( dot(dir, vec3(-0.3, 0.4, 0.85)) * 2.0 + softnoise * 1.5 - time * 0.25 );
+                // diagonal light bands, gently warped by the noise
+                float warp  = softnoise * 0.8 + noise * 0.3;
+                float bands = 0.5 + 0.5 * sin( dot(dir, vec3(0.55, 0.75, 0.35)) * 3.0 + warp * 2.5 + time * 0.2 );
+
+                vec3 col = mix(shadow, color, broad);
+                col = mix(col, light, smoothstep(0.5, 1.0, bands) * 0.7);
+                col = mix(col, accent, smoothstep(0.7, 1.0, bands * broad) * 0.4);
+                gl_FragColor = vec4(col, 1.0);
             }
         </script>
 	    <script src="js/script.js"></script>

@@ -202,8 +202,8 @@ var Sound = function ( sources, volume , x, y , z ) {
 		audioCtx.resume();
 	}
 	// #A3BECB
-	const fullpallete = [0xD3B4BD, 0xA3BECB, 0xfb29ff, 0xff2ea1, 0xff7866, 0xff6505,0xD1A1B7, 0xffca42, 0xd3ff42, 0x66ff9, 0x0ed8a2, 0x0db4ce, 0x0461f6, 0xba7ef6];
-	const pallete = [0xCFE7DD ];
+	const fullpallete = [0xCFE7DD, 0xD3B4BD, 0xA3BECB, 0xfb29ff, 0xff2ea1, 0xff7866, 0xff6505,0xD1A1B7, 0xffca42, 0xd3ff42, 0x66ff9, 0x0ed8a2, 0x0db4ce, 0x0461f6, 0xba7ef6];
+	const pallete = [0xFFFFFF ];
 	sound.source.loop = true;
 	sound.panner.setPosition(x, y, z);
 	// /* BLOB SPHERE */
@@ -292,19 +292,19 @@ function createScene() {
 		uniforms: { 
 			amp: {
 				type: "f",
-				value: 0.0
+				value: 3.0
 			},
 			sync:{
 				type: "f",
-				value: 0.0
+				value: 0.5
 			},
 			time: { 
 				type: "f",
-				value: 0.1
+				value: 0.0001
 			},
 			color: {
-				type: "v3",
-				value: new THREE.Color(0xff0000)
+				type: "c",
+				value: new THREE.Color(BACKGROUND_COLOR)
 			}
 		},
 		vertexShader: document.getElementById('vertexShader2').textContent,
