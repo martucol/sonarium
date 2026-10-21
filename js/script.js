@@ -321,7 +321,7 @@ function createScene() {
 	// grid.setColors( 0xFFFFFF, 0xfFFFFF );
 	// scene.add( grid );
 	// DotGrid( size, spacing, dotSize, color ) -> dotSize is the dot diameter in world units, tweak here
-	var grid = new DotGrid( 500, 25, 3, 0xeeeeee );
+	var grid = new DotGrid( 500, 20, 1.75, 0xeeeeee );
 	scene.add( grid );
 	// renderer setup and adding to HTML
 	renderer = new THREE.WebGLRenderer( { clearColor: BACKGROUND_COLOR, clearAlpha: 1, antialias: true } );
