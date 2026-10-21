@@ -46,9 +46,10 @@ function DotGrid( size, step, dotSize, color ) {
 
 	var mat = new THREE.MeshBasicMaterial({
 		color: color,
-		map: DotGrid.getTexture(),
+		// texture only drives opacity, so the dot colour stays uniform (no dark fringe)
+		alphaMap: DotGrid.getTexture(),
 		transparent: true,
-		alphaTest: 0.5,
+		alphaTest: 0.02,
 		depthWrite: false,
 		side: THREE.DoubleSide,
 		fog: true
@@ -66,10 +67,16 @@ DotGrid.getTexture = function () {
 	var c = document.createElement( 'canvas' );
 	c.width = c.height = 64;
 	var ctx = c.getContext( '2d' );
-	ctx.beginPath();
-	ctx.arc( 32, 32, 30, 0, Math.PI * 2 );
-	ctx.fillStyle = "#373232";
-	ctx.fill();
+	// alphaMap reads brightness: white = opaque, black = transparent
+	ctx.fillStyle = "#000000";
+	ctx.fillRect( 0, 0, 64, 64 );
+	// soft edge: solid until 0.5 of the radius, then fades out. tweak the stops to change the falloff
+	var grad = ctx.createRadialGradient( 32, 32, 0, 32, 32, 30 );
+	grad.addColorStop( 0.0, "#ffffff" );
+	grad.addColorStop( 0.1, "#ffffff" );
+	grad.addColorStop( 1.0, "#000000" );
+	ctx.fillStyle = grad;
+	ctx.fillRect( 0, 0, 64, 64 );
 
 	var tex = new THREE.Texture( c );
 	tex.minFilter = THREE.LinearMipMapLinearFilter;
