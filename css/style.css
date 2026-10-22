@@ -62,7 +62,7 @@ p {
 	background: none;
 	border: none;
 	padding: 0;
-	color: inherit;
+	color: var(--color-foreground);
 	font: inherit;
 	letter-spacing: inherit;
 	text-decoration: underline;
@@ -199,6 +199,25 @@ button:not(.boton--icono):hover, a:hover {
 button i {
 	cursor: pointer;
 }
+
+/* inline svg, sized like the fa icons next to it */
+.icono-paleta {
+	width: 1em;
+	height: 1em;
+	vertical-align: -0.125em;
+	cursor: pointer;
+}
+/* filled while the sky is on; the paint dots take the scene color so they stay visible */
+.icono-paleta--lleno path {
+	fill: currentColor;
+}
+
+.icono-paleta--lleno circle {
+	fill: var(--color-background);
+	stroke: var(--color-background);
+
+}
+
 
 #startRecordingPath2{
 	color: red;

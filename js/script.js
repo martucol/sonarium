@@ -84,14 +84,12 @@ function toggleView(){
 	if (view == false) {
 		scene.add(sphere) ;
 		view = true;
-		toggleBtn.classList.remove("fa-thermometer-empty");
-		toggleBtn.classList.add('fa-thermometer');
+		toggleBtn.classList.add('icono-paleta--lleno');
 
 	} else if (view == true) {
 		scene.remove(sphere);
 		view = false;
-		toggleBtn.classList.remove('fa-thermometer-full');
-		toggleBtn.classList.add('fa-thermometer-empty');
+		toggleBtn.classList.remove('icono-paleta--lleno');
 	}
 }
 
