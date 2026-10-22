@@ -41,6 +41,7 @@
 			<div class="landing__notas">
 				<p>once you finish recording, the sound will stay looping in that place.</p>
 				<p>use headphones for a better experience :)</p>
+				<p>got a scene file? <button onclick="openSceneFile()" class="landing__enlace">load it</button></p>
 			</div>
 
 			<button onclick="cambioEstilo()" id="comenzar" class="button landing__button">start</button>
@@ -59,8 +60,9 @@
 				<button onclick="stopRecordingPath(this)"  class="boton"  id="stopRecordingPath"><i class="fa fa-pause" aria-hidden="true"></i></button>  
 				<p >Start/Stop Recording Path</p> 
 				-->
+				<button onclick="mute(this)" class="boton boton--icono" id="muteBtn" ><i id="muteFav" class="fa fa-volume-up"  aria-hidden="true"></i></button>
 				<button onclick="toggleView(this)" class="boton  boton--icono" ><i id="toggleFav" class="fa fa-thermometer-empty" aria-hidden="true"></i></button>
-				<p> Toggle View </p>
+
 			</div>
 			
 			<div class="seccion">
@@ -68,13 +70,17 @@
 		  		<button onclick="stopRecordingSound(this)" class="boton boton--icono boton--parar" id="stop"><i class=" fa fa-stop" aria-hidden="true"></i></button>
 		  		<p >Start/Stop Recording Sound</p>
 	  		</div>
+	  		
 	  		<div class="seccion">
-		  		<button onclick="info()" class="boton boton--icono" id="info"><i class="fa fa-info-circle" aria-hidden="true"></i></button>
-		  		<button onclick="mute(this)" class="boton boton--icono" id="muteBtn" ><i id="muteFav" class="fa fa-volume-up"  aria-hidden="true"></i></button>
-		  		<p> Mute / Info</p>
+                <button onclick="downloadScene()" class="boton" id="saveScene" title="save scene">save</button>
+		  		<button onclick="openSceneFile()" class="boton" id="loadScene" title="load scene">load</button>
+                <span> ~ </span>
+		  		<button onclick="info()" class="boton" id="info">info</button>
 	  		</div>
 	  	</div>
   
+		<input type="file" id="sceneFile" accept=".json,application/json" hidden onchange="loadSceneFromFile(this)">
+
   		<pre id="log"></pre>
   		
 		<div id="container" ></div>

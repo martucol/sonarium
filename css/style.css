@@ -57,6 +57,18 @@ p {
 	text-underline-offset: 0.2em;
 }
 
+/* button that reads like the landing links */
+.landing__enlace {
+	background: none;
+	border: none;
+	padding: 0;
+	color: inherit;
+	font: inherit;
+	letter-spacing: inherit;
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+}
+
 .landing__encabezado {
 	display: flex;
 	flex-direction: column;
@@ -152,6 +164,7 @@ button:not(.boton--icono):hover, a:hover {
 
 .seccion {
 	margin: 0;
+	width: 100%;
 }
 .seccion p {
 	

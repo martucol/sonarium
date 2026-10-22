@@ -41,7 +41,6 @@ var shadermaterial;
 var material_sphere1, material_sphere2;
 var sonidos = [];
 var sound1, sound2;
-var currentPosition = (0,0,0);
 var limit;
 
 let audioRecorder;
@@ -50,6 +49,8 @@ let shouldStop = false;
 let stopped = false;
 
 const BACKGROUND_COLOR = 0x828f85;
+// bump when the saved scene format changes
+const SCENE_VERSION = 1;
 
 
 function cambioEstilo(){		
@@ -109,7 +110,8 @@ function startUserMedia(stream) {
 		}
 	
 		if(shouldStop === true && stopped === false) {
-			createSoundObject(currentPosition, new Blob(recordedChunks));
+			// the sound stays wherever the camera is when the recording ends
+			createSoundObject(camera.position.clone(), new Blob(recordedChunks, { type: mediaRecorder.mimeType }));
 			stopped = true;
 			mixer.gain.value = 1;
 		}
@@ -181,7 +183,7 @@ var Sound = function ( sources, volume , x, y , z ) {
 		audio.setAttribute('loop', true);
 	}
 
-	this.position = new THREE.Vector3();
+	this.position = new THREE.Vector3( x, y, z );
 	this.play = function () {
 		audio.play();
 	}
@@ -229,13 +231,135 @@ var Sound = function ( sources, volume , x, y , z ) {
 	esfera.position.set( x, y+2, z );
 	esfera.scale.set( 40, 40, 1 );   // blob size, tune
 	scene.add( esfera );
+
+	// stop the sound and take it out of the scene (used when a scene is restored over this one)
+	this.dispose = function () {
+		audio.pause();
+		sound.panner.disconnect();
+		scene.remove( esfera );
+		spriteMat.map.dispose();
+		spriteMat.dispose();
+		for ( var i = 0; i < sources.length; i ++ ) {
+			URL.revokeObjectURL( sources[ i ] );
+		}
+	}
 }
 
 function createSoundObject(position, blob) {
 	var url = URL.createObjectURL(blob);
-	var sound = new Sound( [ url ], 1, camera.position.x , camera.position.y, camera.position.z);
+	var sound = new Sound( [ url ], 1, position.x, position.y, position.z );
+	// keep the recording so the scene can be saved later
+	sound.blob = blob;
 	sound.play();
-	sonidos.push(sound);       
+	sonidos.push(sound);
+}
+
+// ----------  guardar / cargar escena --------
+function blobToDataURL(blob) {
+	return new Promise(function(resolve, reject) {
+		var reader = new FileReader();
+		reader.onload = function() { resolve(reader.result); };
+		reader.onerror = function() { reject(reader.error); };
+		reader.readAsDataURL(blob);
+	});
+}
+
+// the audio goes inside the json (src.kind "inline"), so a single file holds the whole scene
+function serializeScene() {
+	return Promise.all(sonidos.map(function(sound) {
+		return blobToDataURL(sound.blob).then(function(data) {
+			return {
+				position: { x: sound.position.x, y: sound.position.y, z: sound.position.z },
+				mimeType: sound.blob.type,
+				src: { kind: "inline", data: data }
+			};
+		});
+	})).then(function(sounds) {
+		return {
+			app: "sonarium",
+			version: SCENE_VERSION,
+			createdAt: new Date().toISOString(),
+			sounds: sounds
+		};
+	});
+}
+
+function downloadScene() {
+	if (sonidos.length === 0) {
+		alert("there is nothing to save yet, record a sound first");
+		return;
+	}
+	serializeScene().then(function(data) {
+		var file = new Blob([ JSON.stringify(data) ], { type: "application/json" });
+		var stamp = data.createdAt.slice(0, 16).replace(/[-:]/g, "").replace("T", "-");
+		var link = document.createElement("a");
+		link.href = URL.createObjectURL(file);
+		link.download = "sonarium-" + stamp + ".json";
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		setTimeout(function() { URL.revokeObjectURL(link.href); }, 1000);
+		__log("scene saved: " + data.sounds.length + " sounds");
+	}).catch(function(e) {
+		__log("could not save scene: " + e);
+		alert("sorry, the scene could not be saved");
+	});
+}
+
+function openSceneFile() {
+	document.querySelector("#sceneFile").click();
+}
+
+function loadSceneFromFile(input) {
+	var file = input.files[0];
+	// reset so picking the same file again still fires onchange
+	input.value = "";
+	if (!file) return;
+	if (sonidos.length > 0 && !confirm("this will replace the sounds in your current scene. continue?")) return;
+
+	file.text().then(function(text) {
+		var data = JSON.parse(text);
+		validateScene(data);
+		return restoreScene(data);
+	}).then(function() {
+		cambioEstilo();
+	}).catch(function(e) {
+		__log("could not load scene: " + e);
+		alert("sorry, this file could not be loaded as a sonarium scene\n(" + e.message + ")");
+	});
+}
+
+function validateScene(data) {
+	if (!data || data.app !== "sonarium") throw new Error("not a sonarium scene file");
+	if (data.version > SCENE_VERSION) throw new Error("this scene was saved with a newer version of sonarium");
+	if (!Array.isArray(data.sounds)) throw new Error("the scene has no sound list");
+	data.sounds.forEach(function(s, i) {
+		var p = s && s.position;
+		if (!p || !isFinite(p.x) || !isFinite(p.y) || !isFinite(p.z)) throw new Error("sound " + (i + 1) + " has an invalid position");
+		// only embedded audio for now, never fetch arbitrary urls from a file someone sent
+		if (!s.src || s.src.kind !== "inline" || typeof s.src.data !== "string" || s.src.data.indexOf("data:audio/") !== 0) {
+			throw new Error("sound " + (i + 1) + " has no embedded audio");
+		}
+	});
+}
+
+function restoreScene(data) {
+	// decode everything first, so a broken file leaves the current scene untouched
+	return Promise.all(data.sounds.map(function(s) {
+		return fetch(s.src.data).then(function(r) { return r.blob(); });
+	})).then(function(blobs) {
+		clearScene();
+		blobs.forEach(function(blob, i) {
+			var p = data.sounds[i].position;
+			createSoundObject(new THREE.Vector3(p.x, p.y, p.z), blob);
+		});
+		__log("scene loaded: " + blobs.length + " sounds");
+	});
+}
+
+function clearScene() {
+	sonidos.forEach(function(sound) { sound.dispose(); });
+	sonidos = [];
 }
 
 function init() {
@@ -243,13 +367,10 @@ function init() {
 	try {
 		// webkit shim
 		window.AudioContext = window.AudioContext || window.webkitAudioContext;
-		navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia ||
-						navigator.mozGetUserMedia;
 		window.URL = window.URL || window.webkitURL;
-		
+
 		audioCtx = new AudioContext;
 		__log('Audio context set up.');
-		__log('navigator.getUserMedia ' + (navigator.getUserMedia ? 'available.' : 'not present!'));
 	} catch (e) {
 		alert('No web audio support in this browser!');
 	}
@@ -257,9 +378,14 @@ function init() {
 	if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
 
     
-    navigator.getUserMedia({audio: true}, startUserMedia, function(e) {
-      __log('No live audio input: ' + e);
-    });
+	// mediaDevices only exists on https or localhost; without it the scene still runs, just without recording
+	if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+		navigator.mediaDevices.getUserMedia({audio: true}).then(startUserMedia).catch(function(e) {
+			__log('No live audio input: ' + e);
+		});
+	} else {
+		__log('No live audio input: microphone needs https or localhost');
+	}
 	
 	mixer = audioCtx.createGain();
 	mixer.connect(audioCtx.destination);
