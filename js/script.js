@@ -26,7 +26,7 @@ var container;
 var camera, controls, scene, renderer;
 var clock = new THREE.Clock();
 // create audio context
-var audio_context, mixer;
+var audio_context, mixer, limiter;
 var streamDestination;
 /// create recorder for mic
 var recorder;
@@ -142,18 +142,68 @@ function startRecordingSound(button) {
  }
 
 ////  funcion para descargar sonidos --------------------------
+// records the mixer output (what the listener hears while walking) and downloads it as mp3
+function setupPathRecorder() {
+	// the encoder runs in a worker, which browsers block on file:// pages; the scene still runs without it
+	try {
+		// record after the limiter so the mp3 matches what you hear
+		mediaRec = new WebAudioRecorder(limiter, {
+			workerDir: "build/",
+			encoding: "mp3",
+			options: { timeLimit: 60 * 60 }
+		});
+	} catch (e) {
+		__log('No walk recording: ' + e);
+		return;
+	}
+	mediaRec.onComplete = function(recorder, blob) {
+		var stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "-");
+		var link = document.createElement("a");
+		link.href = URL.createObjectURL(blob);
+		link.download = "sonarium-walk-" + stamp + ".mp3";
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		setTimeout(function() { URL.revokeObjectURL(link.href); }, 1000);
+		__log("walk saved");
+		resetPathButtons();
+	};
+	mediaRec.onError = function(recorder, message) {
+		__log("walk recording error: " + message);
+		alert("sorry, the walk could not be recorded");
+		resetPathButtons();
+	};
+}
+
+// also called when the time limit ends the recording on its own
+function resetPathButtons() {
+	var startBtn = document.querySelector("#startRecordingPath");
+	startBtn.disabled = false;
+	startBtn.classList.remove('active');
+	document.querySelector("#stopRecordingPath").disabled = true;
+}
+
 function startRecordingPath(button) {
+	if (!mediaRec) {
+		alert("sorry, walk recording needs the page to be served (https or localhost)");
+		return;
+	}
+	// nothing reaches the recorder while the context is suspended
+	if (audioCtx.state === 'suspended') {
+		audioCtx.resume();
+	}
     mediaRec.startRecording();
     button.disabled = true;
+    button.classList.add('active');
     button.nextElementSibling.disabled = false;
  }
 
  function stopRecordingPath(button) {
   	mediaRec.finishRecording();
+    // start comes back once the mp3 is ready (onComplete)
     button.disabled = true;
-    button.previousElementSibling.disabled = false;   
  }
-//// fin funcion para descargar sonidos 
+//// fin funcion para descargar sonidos
 
 function makeGlowTexture( hexColor ) {
 	var c = document.createElement('canvas');
@@ -184,6 +234,14 @@ var Sound = function ( sources, volume , x, y , z ) {
 	this.position = new THREE.Vector3( x, y, z );
 	this.play = function () {
 		audio.play();
+	}
+	// where the loop is right now, in seconds (saved with the scene so loading keeps the same timing)
+	this.getTime = function () {
+		return audio.currentTime;
+	}
+	// before play() this sets where playback starts
+	this.setTime = function ( seconds ) {
+		audio.currentTime = seconds;
 	}
 	var sound = {};
 	sound.source = audioCtx.createMediaElementSource(audio);
@@ -243,11 +301,12 @@ var Sound = function ( sources, volume , x, y , z ) {
 	}
 }
 
-function createSoundObject(position, blob) {
+function createSoundObject(position, blob, startTime) {
 	var url = URL.createObjectURL(blob);
 	var sound = new Sound( [ url ], 1, position.x, position.y, position.z );
 	// keep the recording so the scene can be saved later
 	sound.blob = blob;
+	if (startTime) sound.setTime(startTime);
 	sound.play();
 	sonidos.push(sound);
 }
@@ -268,6 +327,7 @@ function serializeScene() {
 		return blobToDataURL(sound.blob).then(function(data) {
 			return {
 				position: { x: sound.position.x, y: sound.position.y, z: sound.position.z },
+				startTime: sound.getTime(),
 				mimeType: sound.blob.type,
 				src: { kind: "inline", data: data }
 			};
@@ -334,6 +394,7 @@ function validateScene(data) {
 	data.sounds.forEach(function(s, i) {
 		var p = s && s.position;
 		if (!p || !isFinite(p.x) || !isFinite(p.y) || !isFinite(p.z)) throw new Error("sound " + (i + 1) + " has an invalid position");
+		if (s.startTime !== undefined && !(isFinite(s.startTime) && s.startTime >= 0)) throw new Error("sound " + (i + 1) + " has an invalid start time");
 		// only embedded audio for now, never fetch arbitrary urls from a file someone sent
 		if (!s.src || s.src.kind !== "inline" || typeof s.src.data !== "string" || s.src.data.indexOf("data:audio/") !== 0) {
 			throw new Error("sound " + (i + 1) + " has no embedded audio");
@@ -349,7 +410,8 @@ function restoreScene(data) {
 		clearScene();
 		blobs.forEach(function(blob, i) {
 			var p = data.sounds[i].position;
-			createSoundObject(new THREE.Vector3(p.x, p.y, p.z), blob);
+			// files saved before startTime existed start from the beginning
+			createSoundObject(new THREE.Vector3(p.x, p.y, p.z), blob, data.sounds[i].startTime || 0);
 		});
 		__log("scene loaded: " + blobs.length + " sounds");
 	});
@@ -386,9 +448,18 @@ function init() {
 	}
 	
 	mixer = audioCtx.createGain();
-	mixer.connect(audioCtx.destination);
-	
+	// limiter: many sounds summed at gain 1 go over 1.0 and clip, this squashes the peaks instead
+	limiter = audioCtx.createDynamicsCompressor();
+	limiter.threshold.value = -6;
+	limiter.knee.value = 0;
+	limiter.ratio.value = 20;
+	limiter.attack.value = 0.003;
+	limiter.release.value = 0.25;
+	mixer.connect(limiter);
+	limiter.connect(audioCtx.destination);
+
 	createScene();
+	setupPathRecorder();
 	
 	muted = false; 
 	view = false;
