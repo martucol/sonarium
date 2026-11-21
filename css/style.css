@@ -37,7 +37,8 @@ p {
 	text-align: left;
 	/* extra bottom padding leaves room for the start button */
 	padding: 4rem 5rem 7rem;
-	background: var(--color-landing-fondo);
+	background: transparent;
+	z-index: 1;
 	color: var(--color-landing-texto);
 	font-size: 14px;
 	line-height: 1.6;
@@ -128,6 +129,13 @@ button:not(.boton--icono):hover, a:hover {
 }
 
 #log {display: none;}
+
+/* the webgl canvas is the page background, behind the landing and the controls */
+#container {
+	position: fixed;
+	inset: 0;
+	z-index: 0;
+}
 
 .landing__button {
 	/* sits where the #control bar appears once the experience starts */

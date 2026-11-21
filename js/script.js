@@ -13,7 +13,7 @@ var botonParar = document.querySelector("#stop");
 var muteBtn = document.querySelector("#muteFav");
 var toggleBtn = document.querySelector("#toggleFav");
 
-container.style.visibility="hidden";
+// the sky shader is the page background from the start; only the controls wait for "start"
 controles.style.visibility="hidden";
 
 // //only for debugging
@@ -34,6 +34,8 @@ var recorder;
 var streamDest, mediaRec;
 var esferas = {};
 var sphere;
+// grid + sound sprites: only shown once the experience starts (the sky stays visible behind the landing)
+var mundo;
 // variables a modificar 
 var light, pointLight, ambientLight;
 var mesh, bulbMat;
@@ -54,16 +56,19 @@ const SCENE_VERSION = 1;
 
 
 function cambioEstilo(){		
-	container.style.visibility="visible";
 	landing.style.display="none";
 	controles.style.visibility="visible";
+	mundo.visible = true;
+	controls.enabled = true;
 };
 
 function info(){
-	container.style.visibility="hidden";
 	// clear the inline style so #landing falls back to its css (display: flex)
 	landing.style.display="";
 	controles.style.visibility="hidden";
+	mundo.visible = false;
+	// otherwise the mouse over the landing text would keep turning the camera
+	controls.enabled = false;
 };
 
 function mute(){
@@ -351,7 +356,7 @@ var Sound = function ( buffer, volume , x, y , z ) {
 	var esfera = new THREE.Sprite( spriteMat );
 	esfera.position.set( x, y+2, z );
 	esfera.scale.set( SPRITE_SIZE, SPRITE_SIZE, 1 );
-	scene.add( esfera );
+	mundo.add( esfera );
 
 	// called every frame: opacity (and optionally size) follow the loudness of the sound (sprites scale around their center)
 	// smoothed level, starts at silence so a new sound fades in
@@ -373,7 +378,7 @@ var Sound = function ( buffer, volume , x, y , z ) {
 	this.dispose = function () {
 		sound.source.stop();
 		sound.panner.disconnect();
-		scene.remove( esfera );
+		mundo.remove( esfera );
 		spriteMat.map.dispose();
 		spriteMat.dispose();
 	}
@@ -579,7 +584,9 @@ function init() {
 	setupPathRecorder();
 	
 	muted = false; 
-	view = false;
+	// the sky starts on (createScene adds the sphere)
+	view = true;
+	toggleBtn.classList.add('icono-paleta--lleno');
 	limit = 500;
 }
 
@@ -592,6 +599,8 @@ function createScene() {
 	controls.lookSpeed = 0.07;
 	controls.noFly = true;
 	controls.lookVertical = false; 
+	// off while the landing is showing, cambioEstilo turns it on
+	controls.enabled = false;
 	scene = new THREE.Scene();
 	scene.fog = new THREE.FogExp2( BACKGROUND_COLOR, 0.000000025 );
 	light = new THREE.DirectionalLight( 0xffffff );
@@ -623,6 +632,11 @@ function createScene() {
 		fragmentShader: document.getElementById('fragmentShader2').textContent
 	} );
 	sphere = new THREE.Mesh(new THREE.SphereGeometry(1000, 100, 100), shadermaterial);
+	scene.add(sphere);
+
+	mundo = new THREE.Group();
+	mundo.visible = false;
+	scene.add(mundo);
 
 	var material_wireframe = new THREE.MeshLambertMaterial( { color: 0xFFFFFF, wireframe: true } );
 	mesh = new THREE.Mesh( new THREE.PlaneGeometry( 1000, 1000, 50, 50 ), material_wireframe );
@@ -634,7 +648,7 @@ function createScene() {
 	// scene.add( grid );
 	// DotGrid( size, spacing, dotSize, color ) -> dotSize is the dot diameter in world units, tweak here
 	var grid = new DotGrid( 500, 20, 1.75, 0xeeeeee );
-	scene.add( grid );
+	mundo.add( grid );
 	// renderer setup and adding to HTML
 	renderer = new THREE.WebGLRenderer( { clearColor: BACKGROUND_COLOR, clearAlpha: 1, antialias: true } );
 	// sharper dot texture when seen at a low angle (the floor from eye height)
