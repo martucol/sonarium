@@ -228,9 +228,71 @@ function makeGlowTexture( hexColor ) {
 	return tex;
 }
 
+// ----------  amplitude envelope --------
+// length of each loudness window (seconds)
+const ENVELOPE_WINDOW = 0.02;
+
+// ----- sprite look from amplitude: tweak these -----
+// the main signal is opacity: size changes also read as distance (closer / further away), so they stay optional
+// sprite size (world units) when the amplitude is at AMP_REF
+const SPRITE_SIZE = 40;
+// amplitude (rms) that shows the sprite fully opaque and at full size. measured: speech / normal sounds peak around 0.1 - 0.25
+const AMP_REF = 0.2;
+// "log" only: amplitude treated as silence. measured: room noise sits around 0.001 - 0.002
+const AMP_FLOOR = 0.003;
+// "log": follows decibels, like the ear (quiet sounds still visible). "linear": amplitude / AMP_REF
+const SIZE_CURVE = "log";
+// opacity during silence: a faint ghost so the sound can still be found (0 = invisible)
+const MIN_OPACITY = 0.4;
+// size during silence. 1 = size never changes (opacity only), 0.85 = subtle breathing, 0.4 = big pulse (messes with depth)
+const MIN_SCALE = 1;
+// sounds louder than AMP_REF can grow up to this. 1 = never bigger than SPRITE_SIZE
+const MAX_SCALE = 1;
+
+const ATTACK = 0.03;
+const RELEASE = 0.25;
+
+function decibels(amp) {
+	return 20 * Math.log10(Math.max(amp, 1e-6));
+}
+
+// 0 at silence, 1 at AMP_REF, more than 1 for louder sounds
+function amplitudeToLevel(amp) {
+	var t;
+	if (SIZE_CURVE === "log") {
+		t = (decibels(amp) - decibels(AMP_FLOOR)) / (decibels(AMP_REF) - decibels(AMP_FLOOR));
+	} else {
+		t = amp / AMP_REF;
+	}
+	return Math.max(0, t);
+}
+
+function lerp(a, b, t) {
+	return a + (b - a) * t;
+}
+
+// loudness (rms) of every ENVELOPE_WINDOW of the buffer, computed once when the sound is created,
+// so each frame only has to look up where the loop is right now
+function computeEnvelope(buffer) {
+	var data = buffer.getChannelData(0); // buffers are mono (toMono)
+	var size = Math.max(1, Math.round(ENVELOPE_WINDOW * buffer.sampleRate));
+	var envelope = new Float32Array(Math.ceil(data.length / size));
+	for (var w = 0; w < envelope.length; w ++) {
+		var start = w * size;
+		var end = Math.min(start + size, data.length);
+		var sum = 0;
+		for (var i = start; i < end; i ++) {
+			sum += data[i] * data[i];
+		}
+		envelope[w] = Math.sqrt(sum / (end - start));
+	}
+	return envelope;
+}
+
 var Sound = function ( buffer, volume , x, y , z ) {
 	this.position = new THREE.Vector3( x, y, z );
 	var startedAt = 0;
+	var envelope = computeEnvelope( buffer );
 	this.play = function ( offset ) {
 		offset = ( offset || 0 ) % buffer.duration;
 		sound.source.start( 0, offset );
@@ -239,6 +301,11 @@ var Sound = function ( buffer, volume , x, y , z ) {
 	// where the loop is right now, in seconds (saved with the scene so loading keeps the same timing)
 	this.getTime = function () {
 		return ( audioCtx.currentTime - startedAt ) % buffer.duration;
+	}
+	// loudness of the sound at its source right now (not what the listener hears: no distance, no mixer)
+	this.getAmplitude = function () {
+		var i = Math.floor( this.getTime() / ENVELOPE_WINDOW );
+		return envelope[ Math.min( i, envelope.length - 1 ) ];
 	}
 	var sound = {};
 	sound.source = audioCtx.createBufferSource();
@@ -283,8 +350,24 @@ var Sound = function ( buffer, volume , x, y , z ) {
 	});
 	var esfera = new THREE.Sprite( spriteMat );
 	esfera.position.set( x, y+2, z );
-	esfera.scale.set( 40, 40, 1 );   // blob size, tune
+	esfera.scale.set( SPRITE_SIZE, SPRITE_SIZE, 1 );
 	scene.add( esfera );
+
+	// called every frame: opacity (and optionally size) follow the loudness of the sound (sprites scale around their center)
+	// smoothed level, starts at silence so a new sound fades in
+	var level = 0;
+	this.update = function ( delta ) {
+		// follow the target quickly when it rises (ATTACK) and slowly when it falls (RELEASE),
+		// using the real frame time so it feels the same at any frame rate
+		var target = amplitudeToLevel( this.getAmplitude() );
+		var tau = target > level ? ATTACK : RELEASE;
+		level += ( target - level ) * ( 1 - Math.exp( - delta / tau ) );
+		var t = Math.min( level, 1 );
+		spriteMat.opacity = lerp( MIN_OPACITY, 1, t );
+		// up to AMP_REF: MIN_SCALE -> 1. above it: 1 -> MAX_SCALE
+		var scale = level <= 1 ? lerp( MIN_SCALE, 1, t ) : Math.min( MAX_SCALE, level );
+		esfera.scale.set( SPRITE_SIZE * scale, SPRITE_SIZE * scale, 1 );
+	}
 
 	// stop the sound and take it out of the scene (used when a scene is restored over this one)
 	this.dispose = function () {
@@ -627,6 +710,8 @@ function render() {
 	if (camera.position.y < 20) {
 		camera.position.y = 20;
 	}
+
+	sonidos.forEach(function(sound) { sound.update(delta); });
 
 	shadermaterial.uniforms[ 'time' ].value = .0005 * ( Date.now() - start );
 	shadermaterial.uniforms[ 'amp' ].value = ( Date.now() - start ) / 70 ;
