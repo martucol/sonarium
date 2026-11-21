@@ -461,7 +461,9 @@ function init() {
 		window.AudioContext = window.AudioContext || window.webkitAudioContext;
 		window.URL = window.URL || window.webkitURL;
 
-		audioCtx = new AudioContext;
+		// 44.1 kHz instead of the usual 48 kHz: ~8% less audio work and memory, still full audible range
+		// (old Safari's webkitAudioContext ignores the option and stays at the device rate)
+		audioCtx = new AudioContext({ sampleRate: 44100 });
 		__log('Audio context set up.');
 	} catch (e) {
 		alert('No web audio support in this browser!');
