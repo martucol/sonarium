@@ -227,6 +227,45 @@ button i {
 }
 
 
+/* sky color picker: circles that open above the palette button */
+.paleta {
+	position: relative;
+	display: inline-block;
+}
+
+.paleta__colores {
+	position: absolute;
+	bottom: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column-reverse;
+	gap: 0.6rem;
+	padding-bottom: 1.4rem;
+}
+
+.paleta__colores[hidden] {
+	display: none;
+}
+
+.paleta__color {
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border-radius: 50%;
+	border: 1px solid var(--color-foreground);
+	transition: transform 150ms ease-out;
+}
+
+.paleta__color:hover {
+	transform: scale(1.15);
+}
+
+/* the color the sky has right now */
+.paleta__color[aria-pressed="true"] {
+	box-shadow: 0 0 0 2px var(--color-foreground);
+}
+
 #startRecordingPath2{
 	color: red;
 	border-radius: 100%;

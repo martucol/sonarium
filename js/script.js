@@ -12,6 +12,8 @@ var botonGrabar = document.querySelector("#record");
 var botonParar = document.querySelector("#stop");
 var muteBtn = document.querySelector("#muteFav");
 var toggleBtn = document.querySelector("#toggleFav");
+var paletaBtn = document.querySelector("#paletaBtn");
+var paletaColores = document.querySelector("#paletaColores");
 
 // the sky shader is the page background from the start; only the controls wait for "start"
 controles.style.visibility="hidden";
@@ -21,7 +23,7 @@ controles.style.visibility="hidden";
 
 // declaración de variables básicas 
 var start = Date.now()
-var muted, view;
+var muted;
 var container;
 var camera, controls, scene, renderer;
 var clock = new THREE.Clock();
@@ -85,17 +87,68 @@ function mute(){
 	}
 }
 
-function toggleView(){
-	if (view == false) {
-		scene.add(sphere) ;
-		view = true;
-		toggleBtn.classList.add('icono-paleta--lleno');
+// ----------  paleta: base color of the sky shader (and the whole page) --------
+const SKY_COLORS = [
+	{ name: "sage", hex: BACKGROUND_COLOR },
+	{ name: "sky blue", hex: 0x88AFC1 },
+	{ name: "charcoal", hex: 0x171313 },
+	{ name: "lilac", hex: 0xd0c3d0 },
+	{ name: "periwinkle", hex: 0xbec0d5 },
+	{ name: "slate", hex: 0x8d939d }
+];
 
-	} else if (view == true) {
-		scene.remove(sphere);
-		view = false;
-		toggleBtn.classList.remove('icono-paleta--lleno');
-	}
+function buildPaleta() {
+	SKY_COLORS.forEach(function(c) {
+		var css = "#" + new THREE.Color(c.hex).getHexString();
+		var b = document.createElement("button");
+		b.className = "paleta__color";
+		b.style.backgroundColor = css;
+		b.title = c.name;
+		b.setAttribute("aria-label", c.name);
+		b.dataset.hex = c.hex;
+		b.setAttribute("aria-pressed", c.hex === skyColor);
+		b.onclick = function() {
+			setSkyColor(c.hex);
+		};
+		paletaColores.appendChild(b);
+	});
+	// click anywhere else or Escape closes the circles
+	document.addEventListener("click", function(e) {
+		if (!paletaColores.hidden && !e.target.closest(".paleta")) togglePaleta(false);
+	});
+	window.addEventListener("keydown", function(e) {
+		if (e.key === "Escape" && !paletaColores.hidden) {
+			togglePaleta(false);
+			paletaBtn.focus();
+		}
+	});
+}
+
+// no argument: open if closed, close if open
+function togglePaleta(open) {
+	if (open === undefined) open = paletaColores.hidden;
+	paletaColores.hidden = !open;
+	paletaBtn.setAttribute("aria-expanded", open);
+	toggleBtn.classList.toggle("icono-paleta--lleno", open);
+}
+
+// current base color of the sky (saved with the scene)
+var skyColor = BACKGROUND_COLOR;
+
+function setSkyColor(hex) {
+	skyColor = hex;
+	var color = new THREE.Color(hex);
+	shadermaterial.uniforms.color.value.copy(color);
+	scene.fog.color.copy(color);
+	renderer.setClearColor(hex, 1);
+	// page background (seen before webgl starts) and the css var the palette icon uses
+	var css = "#" + color.getHexString();
+	document.body.style.backgroundColor = css;
+	document.body.style.setProperty("--color-background", css);
+	// ring on the matching circle (none if a loaded scene uses a color that isn't in SKY_COLORS)
+	paletaColores.querySelectorAll(".paleta__color").forEach(function(o) {
+		o.setAttribute("aria-pressed", Number(o.dataset.hex) === hex);
+	});
 }
 
 // ----------  funciones de recorder js --------
@@ -453,6 +506,7 @@ function serializeScene() {
 			app: "sonarium",
 			version: SCENE_VERSION,
 			createdAt: new Date().toISOString(),
+			skyColor: "#" + new THREE.Color(skyColor).getHexString(),
 			sounds: sounds
 		};
 	});
@@ -528,6 +582,9 @@ function restoreScene(data) {
 		});
 	})).then(function(decoded) {
 		clearScene();
+		// missing (files saved before the palette existed) or not a "#rrggbb" hex: first palette color
+		var validColor = typeof data.skyColor === "string" && /^#[0-9a-f]{6}$/i.test(data.skyColor);
+		setSkyColor(validColor ? parseInt(data.skyColor.slice(1), 16) : SKY_COLORS[0].hex);
 		decoded.forEach(function(d, i) {
 			var p = data.sounds[i].position;
 			// files saved before startTime existed start from the beginning
@@ -584,9 +641,7 @@ function init() {
 	setupPathRecorder();
 	
 	muted = false; 
-	// the sky starts on (createScene adds the sphere)
-	view = true;
-	toggleBtn.classList.add('icono-paleta--lleno');
+	buildPaleta();
 	limit = 500;
 }
 

@@ -56,7 +56,8 @@
 		<div id="control" class="hidden">
 			<div class="seccion">
 				<button onclick="mute(this)" class="boton boton--icono" id="muteBtn" ><i id="muteFav" class="fa fa-volume-up"  aria-hidden="true"></i></button>
-				<button onclick="toggleView(this)" class="boton  boton--icono" ><!-- palette icon from lucide.dev (ISC license) -->
+				<span class="paleta">
+				<button onclick="togglePaleta()" class="boton boton--icono" id="paletaBtn" title="sky color" aria-label="sky color" aria-haspopup="true" aria-expanded="false" aria-controls="paletaColores"><!-- palette icon from lucide.dev (ISC license) -->
 					<svg id="toggleFav" class="icono-paleta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 						<path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/>
 						<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
@@ -64,6 +65,9 @@
 						<circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
 						<circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
 					</svg></button>
+					<!-- filled from SKY_COLORS in script.js -->
+					<span class="paleta__colores" id="paletaColores" role="group" aria-label="sky colors" hidden></span>
+				</span>
 			</div>
 			
 			<div class="seccion">
@@ -559,13 +563,60 @@
             uniform float time;
             uniform vec3 color;
 
+            // ----- accent highlight: tweak these -----
+            // degrees around the color wheel (+ = toward the next hue: green -> blue, orange -> yellow, blue -> violet)
+            const float ACCENT_HUE_SHIFT = 50.0;
+            // 1.0 = same saturation as the base color, more = a bit more colorful highlight
+            const float ACCENT_SATURATION = 0.4;
+            // how far toward white: 0 = base lightness, 1 = white
+            const float ACCENT_LIGHTNESS = 0.32;
+            // the palette colors are almost gray (sage ~0.05), and rotating the hue of a gray changes nothing,
+            // so the accent gets at least this much saturation (the original sage accent had ~0.22)
+            const float ACCENT_MIN_SATURATION = 0.05;
+            // how much the accent shows at the brightest spots of the bands (0 = never, 1 = fully)
+            const float ACCENT_STRENGTH = 0.4;
+
+            // hue, saturation, lightness all 0..1
+            vec3 rgb2hsl(vec3 c) {
+                float mx = max(max(c.r, c.g), c.b);
+                float mn = min(min(c.r, c.g), c.b);
+                float l = (mx + mn) * 0.5;
+                float d = mx - mn;
+                float h = 0.0;
+                float s = 0.0;
+                if (d > 0.00001) {
+                    s = d / (1.0 - abs(2.0 * l - 1.0));
+                    if (mx == c.r)      h = mod((c.g - c.b) / d, 6.0);
+                    else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+                    else                h = (c.r - c.g) / d + 4.0;
+                    h /= 6.0;
+                }
+                return vec3(h, s, l);
+            }
+
+            vec3 hsl2rgb(vec3 hsl) {
+                vec3 rgb = clamp(abs(mod(hsl.x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+                return hsl.z + hsl.y * (rgb - 0.5) * (1.0 - abs(2.0 * hsl.z - 1.0));
+            }
+
             void main() {
                 vec3 dir = normalize(vDir);
 
-                // background color as base, shaded darker / lighter, plus one cool accent
+                // every tone comes from the palette color: brightness changes, hue stays.
+                // lighter tones keep the color's tint (chroma = color minus its gray) instead of
+                // mixing toward white, which would wash them out to neutral gray
+                float lum   = dot(color, vec3(0.299, 0.587, 0.114));
+                vec3 chroma = color - vec3(lum);
                 vec3 shadow = color * 0.78;
-                vec3 light  = mix(color, vec3(1.0), 0.235);
-                vec3 accent = vec3(0.78, 0.84, 0.86);
+                vec3 light  = clamp(vec3(mix(lum, 1.0, 0.235)) + chroma, 0.0, 1.0);
+                // accent: the base color with its hue nudged around the color wheel, like the original
+                // sage sky had a cooler blue-ish highlight. done in HSL so it stays a soft pastel and never clips
+                vec3 hsl    = rgb2hsl(color);
+                vec3 accent = hsl2rgb(vec3(
+                    fract(hsl.x + ACCENT_HUE_SHIFT / 360.0),
+                    clamp(hsl.y * ACCENT_SATURATION, ACCENT_MIN_SATURATION, 1.0),
+                    mix(hsl.z, 1.0, ACCENT_LIGHTNESS)
+                ));
 
                 // large soft gradient across the sky
                 float broad = 0.5 + 0.5 * sin( dot(dir, vec3(-0.3, 0.4, 0.85)) * 2.0 + softnoise * 1.5 - time * 0.25 );
@@ -575,7 +626,7 @@
 
                 vec3 col = mix(shadow, color, broad);
                 col = mix(col, light, smoothstep(0.5, 1.0, bands) * 0.7);
-                col = mix(col, accent, smoothstep(0.7, 1.0, bands * broad) * 0.4);
+                col = mix(col, accent, smoothstep(0.7, 1.0, bands * broad) * ACCENT_STRENGTH);
                 gl_FragColor = vec4(col, 1.0);
             }
         </script>
