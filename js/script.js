@@ -311,10 +311,24 @@ function addLoopFade(buffer) {
 	return buffer;
 }
 
+// every sound is a single point in space, so stereo only doubles the memory: average the channels into one
+function toMono(buffer) {
+	if (buffer.numberOfChannels === 1) return buffer;
+	var mono = audioCtx.createBuffer(1, buffer.length, buffer.sampleRate);
+	var out = mono.getChannelData(0);
+	for (var c = 0; c < buffer.numberOfChannels; c ++) {
+		var data = buffer.getChannelData(c);
+		for (var i = 0; i < buffer.length; i ++) {
+			out[i] += data[i] / buffer.numberOfChannels;
+		}
+	}
+	return mono;
+}
+
 function decodeRecording(blob) {
 	return blob.arrayBuffer().then(function(bytes) {
 		return audioCtx.decodeAudioData(bytes);
-	}).then(addLoopFade);
+	}).then(toMono).then(addLoopFade);
 }
 
 // buffer is the decoded blob (decodeRecording); the blob is kept so the scene can be saved later
