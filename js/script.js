@@ -109,7 +109,13 @@ function startUserMedia(stream) {
 	
 		if(shouldStop === true && stopped === false) {
 			// the sound stays wherever the camera is when the recording ends
-			createSoundObject(camera.position.clone(), new Blob(recordedChunks, { type: mediaRecorder.mimeType }));
+			var position = camera.position.clone();
+			var blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+			decodeRecording(blob).then(function(buffer) {
+				createSoundObject(position, blob, buffer, 0);
+			}).catch(function(e) {
+				__log("could not decode recording: " + e);
+			});
 			stopped = true;
 			mixer.gain.value = 1;
 		}
@@ -222,29 +228,21 @@ function makeGlowTexture( hexColor ) {
 	return tex;
 }
 
-var Sound = function ( sources, volume , x, y , z ) {
-	var audio = document.createElement( 'audio' );
-	for ( var i = 0; i < sources.length; i ++ ) {
-		var source = document.createElement( 'source' );
-		source.src = sources[ i ];
-		audio.appendChild( source );
-		audio.setAttribute('loop', true);
-	}
-
+var Sound = function ( buffer, volume , x, y , z ) {
 	this.position = new THREE.Vector3( x, y, z );
-	this.play = function () {
-		audio.play();
+	var startedAt = 0;
+	this.play = function ( offset ) {
+		offset = ( offset || 0 ) % buffer.duration;
+		sound.source.start( 0, offset );
+		startedAt = audioCtx.currentTime - offset;
 	}
 	// where the loop is right now, in seconds (saved with the scene so loading keeps the same timing)
 	this.getTime = function () {
-		return audio.currentTime;
-	}
-	// before play() this sets where playback starts
-	this.setTime = function ( seconds ) {
-		audio.currentTime = seconds;
+		return ( audioCtx.currentTime - startedAt ) % buffer.duration;
 	}
 	var sound = {};
-	sound.source = audioCtx.createMediaElementSource(audio);
+	sound.source = audioCtx.createBufferSource();
+	sound.source.buffer = buffer;
 	sound.volume = audioCtx.createGain();
 	sound.panner = audioCtx.createPanner();
 	sound.panner.distanceModel = "exponential";
@@ -290,24 +288,40 @@ var Sound = function ( sources, volume , x, y , z ) {
 
 	// stop the sound and take it out of the scene (used when a scene is restored over this one)
 	this.dispose = function () {
-		audio.pause();
+		sound.source.stop();
 		sound.panner.disconnect();
 		scene.remove( esfera );
 		spriteMat.map.dispose();
 		spriteMat.dispose();
-		for ( var i = 0; i < sources.length; i ++ ) {
-			URL.revokeObjectURL( sources[ i ] );
-		}
 	}
 }
 
-function createSoundObject(position, blob, startTime) {
-	var url = URL.createObjectURL(blob);
-	var sound = new Sound( [ url ], 1, position.x, position.y, position.z );
-	// keep the recording so the scene can be saved later
+// short fade baked into both ends of a recording, so the jump from the last sample back to the first doesn't click
+const LOOP_FADE = 0.01;
+
+function addLoopFade(buffer) {
+	var n = Math.min(Math.floor(LOOP_FADE * buffer.sampleRate), Math.floor(buffer.length / 2));
+	for (var c = 0; c < buffer.numberOfChannels; c ++) {
+		var data = buffer.getChannelData(c);
+		for (var i = 0; i < n; i ++) {
+			data[i] *= i / n;
+			data[buffer.length - 1 - i] *= i / n;
+		}
+	}
+	return buffer;
+}
+
+function decodeRecording(blob) {
+	return blob.arrayBuffer().then(function(bytes) {
+		return audioCtx.decodeAudioData(bytes);
+	}).then(addLoopFade);
+}
+
+// buffer is the decoded blob (decodeRecording); the blob is kept so the scene can be saved later
+function createSoundObject(position, blob, buffer, startTime) {
+	var sound = new Sound( buffer, 1, position.x, position.y, position.z );
 	sound.blob = blob;
-	if (startTime) sound.setTime(startTime);
-	sound.play();
+	sound.play(startTime);
 	sonidos.push(sound);
 }
 
@@ -405,15 +419,19 @@ function validateScene(data) {
 function restoreScene(data) {
 	// decode everything first, so a broken file leaves the current scene untouched
 	return Promise.all(data.sounds.map(function(s) {
-		return fetch(s.src.data).then(function(r) { return r.blob(); });
-	})).then(function(blobs) {
+		return fetch(s.src.data).then(function(r) { return r.blob(); }).then(function(blob) {
+			return decodeRecording(blob).then(function(buffer) {
+				return { blob: blob, buffer: buffer };
+			});
+		});
+	})).then(function(decoded) {
 		clearScene();
-		blobs.forEach(function(blob, i) {
+		decoded.forEach(function(d, i) {
 			var p = data.sounds[i].position;
 			// files saved before startTime existed start from the beginning
-			createSoundObject(new THREE.Vector3(p.x, p.y, p.z), blob, data.sounds[i].startTime || 0);
+			createSoundObject(new THREE.Vector3(p.x, p.y, p.z), d.blob, d.buffer, data.sounds[i].startTime || 0);
 		});
-		__log("scene loaded: " + blobs.length + " sounds");
+		__log("scene loaded: " + decoded.length + " sounds");
 	});
 }
 
@@ -542,12 +560,40 @@ function animate() {
 	render();
 }
 
+// how long the listener takes to glide to a new position (seconds). setPosition jumps once per frame,
+// and walking through a loud sound those jumps are heard as crackle ("fry")
+const LISTENER_SMOOTHING = 0.03;
+
+function moveListener(position, forward, up) {
+	var listener = audioCtx.listener;
+	var t = audioCtx.currentTime;
+	// older browsers only have the setPosition / setOrientation methods
+	if (!listener.positionX) {
+		if (position) listener.setPosition(position.x, position.y, position.z);
+		if (forward) listener.setOrientation(forward.x, forward.y, forward.z, up.x, up.y, up.z);
+		return;
+	}
+	if (position) {
+		listener.positionX.setTargetAtTime(position.x, t, LISTENER_SMOOTHING);
+		listener.positionY.setTargetAtTime(position.y, t, LISTENER_SMOOTHING);
+		listener.positionZ.setTargetAtTime(position.z, t, LISTENER_SMOOTHING);
+	}
+	if (forward) {
+		listener.forwardX.setTargetAtTime(forward.x, t, LISTENER_SMOOTHING);
+		listener.forwardY.setTargetAtTime(forward.y, t, LISTENER_SMOOTHING);
+		listener.forwardZ.setTargetAtTime(forward.z, t, LISTENER_SMOOTHING);
+		listener.upX.setTargetAtTime(up.x, t, LISTENER_SMOOTHING);
+		listener.upY.setTargetAtTime(up.y, t, LISTENER_SMOOTHING);
+		listener.upZ.setTargetAtTime(up.z, t, LISTENER_SMOOTHING);
+	}
+}
+
 function render() {
 	let delta = clock.getDelta();
 	let	time = clock.getElapsedTime() * 5;
 	controls.update( delta );
 	renderer.render( scene, camera );
-	audioCtx.listener.setPosition(camera.position.x, camera.position.y, camera.position.z);
+	moveListener(camera.position, null, null);
 
 	//limit camera movement
 	if (camera.position.x > limit) {
@@ -585,7 +631,7 @@ function render() {
 	up.normalize();
 
 	// Set the orientation and the up-vector for the listener.
-	audioCtx.listener.setOrientation(vec.x, vec.y, vec.z, up.x, up.y, up.z);
+	moveListener(null, vec, up);
 
 	m.elements[12] = mx;
 	m.elements[13] = my;
